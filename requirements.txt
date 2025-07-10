@@ -1,0 +1,16 @@
+
+# LangChain & Ecosystem
+langchain
+langchain-community
+langchain-core
+langchain-groq
+
+# Vectorstore
+# chromadb
+pinecone
+
+# Embeddings
+# sentence-transformers
+# langchain-google-generative-ai
+langchain-google-genai
+
