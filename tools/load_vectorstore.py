@@ -8,6 +8,7 @@ from pinecone import Pinecone, ServerlessSpec
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from process_text_llm import get_llm_chain
 
 # Load environment variables
 load_dotenv()
@@ -27,23 +28,23 @@ spec = ServerlessSpec(cloud="aws", region=PINECONE_ENV)
 existing_indexes = [i["name"] for i in pc.list_indexes()]
 
 # Delete existing index if it exists
-# if PINECONE_INDEX_NAME in existing_indexes:
-#     print(f"Deleting existing index: {PINECONE_INDEX_NAME}")
-#     pc.delete_index(name=PINECONE_INDEX_NAME)
-#     while PINECONE_INDEX_NAME in pc.list_indexes():
-#         time.sleep(5)
+if PINECONE_INDEX_NAME in existing_indexes:
+    print(f"Deleting existing index: {PINECONE_INDEX_NAME}")
+    pc.delete_index(name=PINECONE_INDEX_NAME)
+    while PINECONE_INDEX_NAME in pc.list_indexes():
+        time.sleep(5)
 
-# pc.create_index(
-#     name=PINECONE_INDEX_NAME,
-#     dimension=768,  # For GoogleGenerativeAI embeddings
-#     metric="dotproduct",
-#     spec=spec
-# )
-# while not pc.describe_index(PINECONE_INDEX_NAME).status["ready"]:
-#     time.sleep(1)
+pc.create_index(
+    name=PINECONE_INDEX_NAME,
+    dimension=768,  # For GoogleGenerativeAI embeddings
+    metric="dotproduct",
+    spec=spec
+)
+while not pc.describe_index(PINECONE_INDEX_NAME).status["ready"]:
+    time.sleep(1)
 
-# index = pc.Index(PINECONE_INDEX_NAME)
-index = pc.Index(host="https://fbpostsindex-0i28dvm.svc.aped-4627-b74a.pinecone.io")
+index = pc.Index(PINECONE_INDEX_NAME)
+# index = pc.Index(host="https://fbpostsindex-0i28dvm.svc.aped-4627-b74a.pinecone.io")
 
 # Load, split, embed and upsert PDF content
 def load_vectorstore():
@@ -62,15 +63,17 @@ def load_vectorstore():
         # Choose the one with the most non-whitespace characters
         description = max(desc_fields, key=lambda d: len(d.strip()))
         if not description.strip():
-            description = 'No Content Available'
-        fb_docs.append({
-            "id": f"{idx}",
-            "post_author": post_author,
-            "post_desc": description,
-            "post_date": today,
-            "post_link": post.get("post_link", ""),
-            "page_url": post.get("page_url", "")
-        })
+            response = 'No Content Available'
+        else:
+            response = get_llm_chain(description)
+            fb_docs.append({
+                "id": f"{idx}",
+                "post_author": post_author,
+                "post_desc": response,
+                "post_date": today,
+                "post_link": post.get("post_link", ""),
+                "page_url": post.get("page_url", "")
+            })
 
     #  Ingest
     texts = [doc["post_desc"] for doc in fb_docs]
@@ -87,17 +90,5 @@ def load_vectorstore():
 
     print("Upload complete for fb_docs")
 
-# load_vectorstore()
-# 2. Embed the question
-embedded_query = embed_model.embed_query("𝗦𝗣𝗖𝗖 𝗤𝘂𝗲𝘇𝗼𝗻 𝗖𝗶𝘁𝘆 𝗖𝗮𝗺𝗽𝘂𝘀 𝗶𝘀 𝗛𝗶𝗿𝗶𝗻𝗴")
-
-# 3. Query Pinecone
-results = index.query(
-    namespace="__default__",
-    vector=embedded_query, 
-    top_k=60,
-    include_metadata=True,
-    include_values=False
-)
-
-print(results)
+load_vectorstore()
+print("Vectorstore loaded successfully.")
